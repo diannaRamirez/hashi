@@ -440,7 +440,7 @@ resource "azurerm_mssql_managed_instance" "test" {
 `, r.template(data, data.Locations.Primary), data.RandomInteger, storageAccountType)
 }
 
-func (r MsSqlManagedInstanceResource) withoutMeAdmin(data acceptance.TestData) string {
+func (r MsSqlManagedInstanceResource) withoutAadAdmin(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 %[1]s
 
@@ -517,11 +517,6 @@ resource "azurerm_mssql_managed_instance" "test" {
   tags = {
     environment = "staging"
     database    = "test"
-  }
-
-  # Changing azure_active_directory_administrator is ignored because API returns the values of azure_active_directory_administrator even if it is not specified in the config when microsoft entra authentication only is enabled
-  lifecycle {
-    ignore_changes = [azure_active_directory_administrator]
   }
 }
 `, r.template(data, data.Locations.Primary), data.RandomInteger)
@@ -841,13 +836,13 @@ resource "azurerm_mssql_managed_instance" "secondary_2" {
 `, r.basic(data), r.templateSecondary(data), r.templateExtraSecondary(data), data.RandomInteger)
 }
 
-func TestAccMsSqlManagedInstance_meAdmin(t *testing.T) {
+func TestAccMsSqlManagedInstance_aadAdmin(t *testing.T) {
 	data := acceptance.BuildTestData(t, "azurerm_mssql_managed_instance", "test")
 	r := MsSqlManagedInstanceResource{}
 
 	data.ResourceTest(t, r, []acceptance.TestStep{
 		{
-			Config: r.meAdmin(data),
+			Config: r.aadAdmin(data),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
@@ -856,13 +851,13 @@ func TestAccMsSqlManagedInstance_meAdmin(t *testing.T) {
 	})
 }
 
-func TestAccMsSqlManagedInstance_meAdminWithMeAuthOnly(t *testing.T) {
+func TestAccMsSqlManagedInstance_aadAdminWithAadOnly(t *testing.T) {
 	data := acceptance.BuildTestData(t, "azurerm_mssql_managed_instance", "test")
 	r := MsSqlManagedInstanceResource{}
 
 	data.ResourceTest(t, r, []acceptance.TestStep{
 		{
-			Config: r.meAdminWithMeAuthOnlyEnabled(data),
+			Config: r.aadAdminWithAadAuthOnlyEnabled(data),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
@@ -871,13 +866,13 @@ func TestAccMsSqlManagedInstance_meAdminWithMeAuthOnly(t *testing.T) {
 	})
 }
 
-func TestAccMsSqlManagedInstance_meAdminUpdate(t *testing.T) {
+func TestAccMsSqlManagedInstance_aadAdminUpdate(t *testing.T) {
 	data := acceptance.BuildTestData(t, "azurerm_mssql_managed_instance", "test")
 	r := MsSqlManagedInstanceResource{}
 
 	data.ResourceTest(t, r, []acceptance.TestStep{
 		{
-			Config: r.withoutMeAdmin(data),
+			Config: r.withoutAadAdmin(data),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
@@ -891,14 +886,14 @@ func TestAccMsSqlManagedInstance_meAdminUpdate(t *testing.T) {
 		},
 		data.ImportStep("administrator_login_password"),
 		{
-			Config: r.setMeAdmin(data),
+			Config: r.setAadAdmin(data),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
 		},
 		data.ImportStep("administrator_login_password"),
 		{
-			Config: r.withoutMeAdmin(data),
+			Config: r.withoutAadAdmin(data),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
@@ -912,7 +907,7 @@ func TestAccMsSqlManagedInstance_meAdminUpdate(t *testing.T) {
 		},
 		data.ImportStep("administrator_login_password"),
 		{
-			Config: r.meAdminWithMeAuthOnlyEnabledUpdate(data),
+			Config: r.aadAdminWithAadAuthOnlyEnabledUpdate(data),
 			Check: acceptance.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
 			),
@@ -921,13 +916,23 @@ func TestAccMsSqlManagedInstance_meAdminUpdate(t *testing.T) {
 	})
 }
 
-func (r MsSqlManagedInstanceResource) meAdmin(data acceptance.TestData) string {
+func (r MsSqlManagedInstanceResource) aadAdmin(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 %[1]s
 
 provider "azuread" {}
 
 data "azurerm_client_config" "test" {}
+
+data "azuread_domains" "test" {
+  only_initial = true
+}
+
+resource "azuread_user" "test" {
+  user_principal_name = "acctestAadAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
+  display_name        = "acctestAadAdminUser-%[2]d"
+  password            = "TerrAform321!"
+}
 
 resource "azurerm_mssql_managed_instance" "test" {
   name                = "acctestsqlserver%[2]d"
@@ -948,8 +953,8 @@ resource "azurerm_mssql_managed_instance" "test" {
   }
 
   azure_active_directory_administrator {
-    login_username = "AzureME Admin2"
-    object_id      = data.azurerm_client_config.test.object_id
+    login_username = azuread_user.test.user_principal_name
+    object_id      = azuread_user.test.object_id
     tenant_id      = data.azurerm_client_config.test.tenant_id
   }
 
@@ -981,8 +986,8 @@ data "azuread_domains" "test" {
 }
 
 resource "azuread_user" "test" {
-  user_principal_name = "acctestmeAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
-  display_name        = "acctestmeAdminUser-%[2]d"
+  user_principal_name = "acctestAadAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
+  display_name        = "acctestAadAdminUser-%[2]d"
   password            = "TerrAform321!"
 }
 
@@ -990,16 +995,26 @@ resource "azuread_directory_role_member" "test" {
   role_object_id   = azuread_directory_role.test.object_id
   member_object_id = azurerm_mssql_managed_instance.test.identity.0.principal_id
 }
-`, r.withoutMeAdmin(data), data.RandomInteger)
+`, r.withoutAadAdmin(data), data.RandomInteger)
 }
 
-func (r MsSqlManagedInstanceResource) meAdminWithMeAuthOnlyEnabled(data acceptance.TestData) string {
+func (r MsSqlManagedInstanceResource) aadAdminWithAadAuthOnlyEnabled(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 %[1]s
 
 provider "azuread" {}
 
 data "azurerm_client_config" "test" {}
+
+data "azuread_domains" "test" {
+  only_initial = true
+}
+
+resource "azuread_user" "test" {
+  user_principal_name = "acctestAadAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
+  display_name        = "acctestAadAdminUser-%[2]d"
+  password            = "TerrAform321!"
+}
 
 resource "azurerm_mssql_managed_instance" "test" {
   name                = "acctestsqlserver%[2]d"
@@ -1017,10 +1032,10 @@ resource "azurerm_mssql_managed_instance" "test" {
   }
 
   azure_active_directory_administrator {
-    login_username                      = "AzureME Admin2"
-    object_id                           = data.azurerm_client_config.test.object_id
+    login_username                      = azuread_user.test.user_principal_name
+    object_id                           = azuread_user.test.object_id
     tenant_id                           = data.azurerm_client_config.test.tenant_id
-    azuread_authentication_only_enalbed = true
+    azuread_authentication_only_enabled = true
   }
 
   tags = {
@@ -1032,7 +1047,7 @@ resource "azurerm_mssql_managed_instance" "test" {
     azurerm_subnet_network_security_group_association.test,
     azurerm_subnet_route_table_association.test,
   ]
-  # Changing administrator_login is ignored because API returns the value of administrator_login even if it is not specified in the config when azuread_authentication_only_enalbed is set to true
+  # Changing administrator_login is ignored because API returns the value of administrator_login even if it is not specified in the config when azuread_authentication_only_enabled is set to true
   lifecycle {
     ignore_changes = [administrator_login]
   }
@@ -1040,7 +1055,7 @@ resource "azurerm_mssql_managed_instance" "test" {
 `, r.template(data, data.Locations.Primary), data.RandomInteger)
 }
 
-func (r MsSqlManagedInstanceResource) setMeAdmin(data acceptance.TestData) string {
+func (r MsSqlManagedInstanceResource) setAadAdmin(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 %[1]s
 
@@ -1057,8 +1072,8 @@ data "azuread_domains" "test" {
 }
 
 resource "azuread_user" "test" {
-  user_principal_name = "acctestmeAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
-  display_name        = "acctestmeAdminUser-%[2]d"
+  user_principal_name = "acctestAadAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
+  display_name        = "acctestAadAdminUser-%[2]d"
   password            = "TerrAform321!"
 }
 
@@ -1104,7 +1119,7 @@ resource "azurerm_mssql_managed_instance" "test" {
 `, r.template(data, data.Locations.Primary), data.RandomInteger)
 }
 
-func (r MsSqlManagedInstanceResource) meAdminWithMeAuthOnlyEnabledUpdate(data acceptance.TestData) string {
+func (r MsSqlManagedInstanceResource) aadAdminWithAadAuthOnlyEnabledUpdate(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 %[1]s
 
@@ -1121,8 +1136,8 @@ data "azuread_domains" "test" {
 }
 
 resource "azuread_user" "test" {
-  user_principal_name = "acctestmeAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
-  display_name        = "acctestmeAdminUser-%[2]d"
+  user_principal_name = "acctestAadAdminUser-%[2]d@${data.azuread_domains.test.domains.0.domain_name}"
+  display_name        = "acctestAadAdminUser-%[2]d"
   password            = "TerrAform321!"
 }
 
@@ -1153,7 +1168,7 @@ resource "azurerm_mssql_managed_instance" "test" {
     login_username                      = azuread_user.test.user_principal_name
     object_id                           = azuread_user.test.object_id
     tenant_id                           = data.azurerm_client_config.test.tenant_id
-    azuread_authentication_only_enalbed = true
+    azuread_authentication_only_enabled = true
   }
 
   tags = {
