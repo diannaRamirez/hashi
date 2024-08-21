@@ -400,11 +400,10 @@ func (r MsSqlManagedInstanceResource) Create() sdk.ResourceFunc {
 				Tags: pointer.To(model.Tags),
 			}
 
-			administrators, err := expandMsSqlManagedInstanceExternalAdministrators(model.AzureActiveDirectoryAdministrator)
-			if err != nil {
-				return fmt.Errorf("expanding `azure_active_directory_administrator` for SQL Managed Instance Server %q: %v", id.ID(), err)
+			administrators := expandMsSqlManagedInstanceExternalAdministrators(model.AzureActiveDirectoryAdministrator)
+			if administrators != nil {
+				parameters.Properties.Administrators = administrators
 			}
-			parameters.Properties.Administrators = administrators
 
 			if parameters.Identity != nil && len(parameters.Identity.IdentityIds) > 0 {
 				for k := range parameters.Identity.IdentityIds {
@@ -515,11 +514,7 @@ func (r MsSqlManagedInstanceResource) Update() sdk.ResourceFunc {
 					}
 				}
 
-				aadAdminProps, err := expandMsSqlManagedInstanceAdministrators(state.AzureActiveDirectoryAdministrator)
-				if err != nil {
-					return err
-				}
-
+				aadAdminProps := expandMsSqlManagedInstanceAdministrators(state.AzureActiveDirectoryAdministrator)
 				if aadAdminProps != nil {
 					aadAdminChanged := checkAADAdminChanged(metadata.ResourceData)
 					if aadAdminChanged {
@@ -798,9 +793,9 @@ func expandMsSqlManagedInstanceAadAuthenticationOnly(input []AzureActiveDirector
 	return false
 }
 
-func expandMsSqlManagedInstanceExternalAdministrators(input []AzureActiveDirectoryAdministrator) (*managedinstances.ManagedInstanceExternalAdministrator, error) {
+func expandMsSqlManagedInstanceExternalAdministrators(input []AzureActiveDirectoryAdministrator) *managedinstances.ManagedInstanceExternalAdministrator {
 	if len(input) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	admin := input[0]
@@ -816,12 +811,12 @@ func expandMsSqlManagedInstanceExternalAdministrators(input []AzureActiveDirecto
 
 	adminParams.AzureADOnlyAuthentication = pointer.To(admin.AzureADAuthenticationOnlyEnabled)
 
-	return &adminParams, nil
+	return &adminParams
 }
 
-func expandMsSqlManagedInstanceAdministrators(input []AzureActiveDirectoryAdministrator) (*managedinstanceadministrators.ManagedInstanceAdministrator, error) {
+func expandMsSqlManagedInstanceAdministrators(input []AzureActiveDirectoryAdministrator) *managedinstanceadministrators.ManagedInstanceAdministrator {
 	if len(input) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	admin := input[0]
@@ -837,7 +832,7 @@ func expandMsSqlManagedInstanceAdministrators(input []AzureActiveDirectoryAdmini
 		adminProps.Properties.TenantId = pointer.To(admin.TenantID)
 	}
 
-	return pointer.To(adminProps), nil
+	return pointer.To(adminProps)
 }
 
 func flattenMsSqlManagedInstanceAdministrators(admin managedinstances.ManagedInstanceExternalAdministrator) []AzureActiveDirectoryAdministrator {
