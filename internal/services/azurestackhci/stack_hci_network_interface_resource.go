@@ -187,7 +187,6 @@ func (r StackHCINetworkInterfaceResource) Create() sdk.ResourceFunc {
 				return fmt.Errorf("performing create %s: %+v", id, err)
 			}
 
-			time.Sleep(2 * time.Minute)
 			metadata.SetID(id)
 
 			return nil

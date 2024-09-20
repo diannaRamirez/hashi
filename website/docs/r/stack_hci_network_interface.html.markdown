@@ -101,9 +101,9 @@ In addition to the Arguments listed above - the following Attributes are exporte
 
 A `ip_configuration` block exports the following:
 
-* `gateway` - The IPv4 address of the gateway for the Network Interface.
+* `gateway` - The IPv4 address of the gateway for the Azure Stack HCI Network Interface.
 
-* `prefix_length` - The prefix length for the address of the Network Interface.
+* `prefix_length` - The prefix length for the address of the Azure Stack HCI Network Interface.
 
 ## Timeouts
 
