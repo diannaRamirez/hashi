@@ -615,6 +615,11 @@ func dataSourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) e
 			if err := d.Set("custom_domain", flattenAccountCustomDomain(props.CustomDomain)); err != nil {
 				return fmt.Errorf("setting `custom_domain`: %+v", err)
 			}
+
+			if !features.FourPointOhBeta() {
+				d.Set("enable_https_traffic_only", pointer.From(props.SupportsHTTPSTrafficOnly))
+			}
+
 			d.Set("https_traffic_only_enabled", pointer.From(props.SupportsHTTPSTrafficOnly))
 			d.Set("is_hns_enabled", pointer.From(props.IsHnsEnabled))
 			d.Set("nfsv3_enabled", pointer.From(props.IsNfsV3Enabled))
@@ -674,6 +679,7 @@ func dataSourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) e
 		routingPreference = model.Properties.RoutingPreference
 		secondaryEndpoints = model.Properties.SecondaryEndpoints
 	}
+
 	endpoints := flattenAccountEndpoints(primaryEndpoints, secondaryEndpoints, routingPreference)
 	if err := endpoints.set(d); err != nil {
 		return err
@@ -683,6 +689,7 @@ func dataSourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) e
 	if keys.Model != nil && keys.Model.Keys != nil {
 		storageAccountKeys = *keys.Model.Keys
 	}
+
 	keysAndConnectionStrings := flattenAccountAccessKeysAndConnectionStrings(id.StorageAccountName, *storageDomainSuffix, storageAccountKeys, endpoints)
 	if err := keysAndConnectionStrings.set(d); err != nil {
 		return err

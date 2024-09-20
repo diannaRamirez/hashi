@@ -13,6 +13,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+
+	providerfeatures "github.com/hashicorp/terraform-provider-azurerm/internal/features"
 )
 
 var (
@@ -137,8 +139,16 @@ func TestProviderConfig_LoadDefault(t *testing.T) {
 		t.Errorf("expected key_vault.recover_soft_deleted_hsm_keys to be true")
 	}
 
-	if !features.LogAnalyticsWorkspace.PermanentlyDeleteOnDestroy {
-		t.Errorf("expected log_analytics_workspace.permanently_delete_on_destroy to be true")
+	if !providerfeatures.FourPointOhBeta() {
+		if !features.LogAnalyticsWorkspace.PermanentlyDeleteOnDestroy {
+			t.Errorf("expected log_analytics_workspace.permanently_delete_on_destroy to be true")
+		}
+	}
+
+	if providerfeatures.FourPointOhBeta() {
+		if features.LogAnalyticsWorkspace.PermanentlyDeleteOnDestroy {
+			t.Errorf("expected log_analytics_workspace.permanently_delete_on_destroy to be false")
+		}
 	}
 
 	if features.TemplateDeployment.DeleteNestedItemsDuringDeletion {

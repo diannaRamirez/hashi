@@ -331,6 +331,11 @@ func TestExpandFeatures(t *testing.T) {
 							"recover_soft_deleted_backup_protected_vm": false,
 						},
 					},
+					"storage": []interface{}{
+						map[string]interface{}{
+							"data_plane_access_on_read_enabled": false,
+						},
+					},
 					"subscription": []interface{}{
 						map[string]interface{}{
 							"prevent_cancellation_on_destroy": false,

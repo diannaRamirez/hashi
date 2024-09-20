@@ -129,6 +129,8 @@ The `features` block supports the following:
 
 * `recovery_services_vault` - (Optional) A `recovery_services_vault` block as defined below.
 
+* `storage` - (Optional) A `storage` block as defined below.
+
 * `template_deployment` - (Optional) A `template_deployment` block as defined below.
 
 * `virtual_machine` - (Optional) A `virtual_machine` block as defined below.
@@ -246,6 +248,12 @@ The `recovery_services_vault` block supports the following:
 The `subscription` block supports the following:
 
 * `prevent_cancellation_on_destroy` - (Optional) Should the `azurerm_subscription` resource prevent a subscription to be cancelled on destroy? Defaults to `false`.
+
+---
+
+The `storage` block supports the following:
+
+* `data_plane_access_on_read_enabled` - (Optional) Should the `azurerm_storage_account` resource attempt data plane calls during the read operation? Defaults to `true`.
 
 ---
 

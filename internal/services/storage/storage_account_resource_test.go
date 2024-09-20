@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-provider-azurerm/internal/acceptance"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/acceptance/check"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/features"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
 	"github.com/hashicorp/terraform-provider-azurerm/utils"
 )
@@ -47,6 +48,21 @@ func TestAccStorageAccount_basic(t *testing.T) {
 				check.That(data.ResourceName).Key("account_replication_type").HasValue("GRS"),
 				check.That(data.ResourceName).Key("tags.%").HasValue("1"),
 				check.That(data.ResourceName).Key("tags.environment").HasValue("staging"),
+			),
+		},
+		data.ImportStep(),
+	})
+}
+
+func TestAccStorageAccount_basicNoDataPlane(t *testing.T) {
+	data := acceptance.BuildTestData(t, "azurerm_storage_account", "test")
+	r := StorageAccountResource{}
+
+	data.ResourceTest(t, r, []acceptance.TestStep{
+		{
+			Config: r.basicDataPlaneDisabled(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
 			),
 		},
 		data.ImportStep(),
@@ -601,6 +617,21 @@ func TestAccStorageAccount_networkRulesDeleted(t *testing.T) {
 	})
 }
 
+func TestAccStorageAccount_privateLink(t *testing.T) {
+	data := acceptance.BuildTestData(t, "azurerm_storage_account", "test")
+	r := StorageAccountResource{}
+
+	data.ResourceTest(t, r, []acceptance.TestStep{
+		{
+			Config: r.networkRulesPrivateLinkAccess(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+			),
+		},
+		data.ImportStep(),
+	})
+}
+
 func TestAccStorageAccount_privateLinkAccess(t *testing.T) {
 	data := acceptance.BuildTestData(t, "azurerm_storage_account", "test")
 	r := StorageAccountResource{}
@@ -754,6 +785,10 @@ func TestAccStorageAccount_blobProperties_kindStorageNotSupportLastAccessTimeEna
 }
 
 func TestAccStorageAccount_queueProperties(t *testing.T) {
+	if features.FourPointOhBeta() {
+		t.Skip("this test is not valid in 4.0 mode due to a removed property, skipping")
+	}
+
 	data := acceptance.BuildTestData(t, "azurerm_storage_account", "test")
 	r := StorageAccountResource{}
 
@@ -786,6 +821,22 @@ func TestAccStorageAccount_queueProperties(t *testing.T) {
 			),
 		},
 		data.ImportStep(),
+	})
+}
+
+func TestAccStorageAccount_staticWebsiteEnabledNoPublicAccess(t *testing.T) {
+	if features.FourPointOhBeta() {
+		t.Skip("this test is not valid in 4.0 mode due to a removed property, skipping")
+	}
+
+	data := acceptance.BuildTestData(t, "azurerm_storage_account", "test")
+	r := StorageAccountResource{}
+
+	data.ResourceTest(t, r, []acceptance.TestStep{
+		{
+			Config:      r.staticWebsiteEnabledNoPublicAccess(data),
+			ExpectError: regexp.MustCompile("'static_website' cannot be set on create, this property has been deprecated"),
+		},
 	})
 }
 
@@ -1814,6 +1865,36 @@ func (r StorageAccountResource) basic(data acceptance.TestData) string {
 	return fmt.Sprintf(`
 provider "azurerm" {
   features {}
+}
+
+resource "azurerm_resource_group" "test" {
+  name     = "acctestRG-storage-%d"
+  location = "%s"
+}
+
+resource "azurerm_storage_account" "test" {
+  name                = "unlikely23exst2acct%s"
+  resource_group_name = azurerm_resource_group.test.name
+
+  location                 = azurerm_resource_group.test.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+
+  tags = {
+    environment = "production"
+  }
+}
+`, data.RandomInteger, data.Locations.Primary, data.RandomString)
+}
+
+func (r StorageAccountResource) basicDataPlaneDisabled(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+provider "azurerm" {
+  features {
+    storage {
+      data_plane_access_on_read_enabled = false
+    }
+  }
 }
 
 resource "azurerm_resource_group" "test" {
@@ -3027,8 +3108,12 @@ resource "azurerm_storage_account" "test" {
   location                 = azurerm_resource_group.test.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
+}
 
-  queue_properties {
+resource "azurerm_storage_account_queue_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     cors_rule {
       allowed_origins    = ["http://www.example.com"]
       exposed_headers    = ["x-tempo-*"]
@@ -3079,8 +3164,12 @@ resource "azurerm_storage_account" "test" {
   location                 = azurerm_resource_group.test.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
+}
 
-  queue_properties {
+resource "azurerm_storage_account_queue_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     cors_rule {
       allowed_origins    = ["http://www.example.com"]
       exposed_headers    = ["x-tempo-*", "x-method-*"]
@@ -3088,6 +3177,7 @@ resource "azurerm_storage_account" "test" {
       allowed_methods    = ["GET"]
       max_age_in_seconds = "2000000000"
     }
+
     cors_rule {
       allowed_origins    = ["http://www.test.com"]
       exposed_headers    = ["x-tempo-*"]
@@ -3095,6 +3185,7 @@ resource "azurerm_storage_account" "test" {
       allowed_methods    = ["PUT"]
       max_age_in_seconds = "1000"
     }
+
     logging {
       version               = "1.0"
       delete                = true
@@ -3139,8 +3230,12 @@ resource "azurerm_storage_account" "test" {
   location                 = azurerm_resource_group.test.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
+}
 
-  queue_properties {
+resource "azurerm_storage_account_queue_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     logging {
       version               = "1.0"
       delete                = true
@@ -3171,8 +3266,12 @@ resource "azurerm_storage_account" "test" {
   location                 = azurerm_resource_group.test.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
+}
 
-  queue_properties {
+resource "azurerm_storage_account_queue_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     minute_metrics {
       version               = "1.0"
       enabled               = false
@@ -3202,6 +3301,41 @@ resource "azurerm_storage_account" "test" {
   account_kind             = "StorageV2"
   account_tier             = "Standard"
   account_replication_type = "LRS"
+}
+
+resource "azurerm_storage_account_static_website_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {}
+}
+`, data.RandomInteger, data.Locations.Primary, data.RandomString)
+}
+
+func (r StorageAccountResource) staticWebsiteEnabledNoPublicAccess(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+provider "azurerm" {
+  features {
+    storage {
+      data_plane_access_on_read_enabled = false
+    }
+  }
+}
+
+resource "azurerm_resource_group" "test" {
+  name     = "acctestRG-storage-%d"
+  location = "%s"
+}
+
+resource "azurerm_storage_account" "test" {
+  name                = "unlikely23exst2acct%s"
+  resource_group_name = azurerm_resource_group.test.name
+
+  location                 = azurerm_resource_group.test.location
+  account_kind             = "StorageV2"
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+
+  public_network_access_enabled = false
 
   static_website {}
 }
@@ -3227,8 +3361,12 @@ resource "azurerm_storage_account" "test" {
   account_kind             = "StorageV2"
   account_tier             = "Standard"
   account_replication_type = "LRS"
+}
 
-  static_website {
+resource "azurerm_storage_account_static_website_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     index_document     = "index.html"
     error_404_document = "404.html"
   }
@@ -3255,8 +3393,12 @@ resource "azurerm_storage_account" "test" {
   account_kind             = "BlockBlobStorage"
   account_tier             = "Premium"
   account_replication_type = "LRS"
+}
 
-  static_website {
+resource "azurerm_storage_account_static_website_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     index_document     = "index.html"
     error_404_document = "404.html"
   }
@@ -3283,8 +3425,12 @@ resource "azurerm_storage_account" "test" {
   account_kind             = "StorageV2"
   account_tier             = "Standard"
   account_replication_type = "LRS"
+}
 
-  static_website {
+resource "azurerm_storage_account_static_website_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     index_document     = "index-2.html"
     error_404_document = "404-2.html"
   }
@@ -3311,10 +3457,14 @@ resource "azurerm_storage_account" "test" {
   account_kind             = "BlockBlobStorage"
   account_tier             = "Premium"
   account_replication_type = "LRS"
+}
 
-  static_website {
-    index_document     = "index-2.html"
-    error_404_document = "404-2.html"
+resource "azurerm_storage_account_static_website_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
+    index_document     = "index.html"
+    error_404_document = "404.html"
   }
 }
 `, data.RandomInteger, data.Locations.Primary, data.RandomString)
@@ -5000,8 +5150,12 @@ resource "azurerm_storage_account" "test" {
   account_kind             = "Storage"
   account_tier             = "Standard"
   account_replication_type = "%s"
+}
 
-  queue_properties {
+resource "azurerm_storage_account_queue_properties" "test" {
+  storage_account_id = azurerm_storage_account.test.id
+
+  properties {
     cors_rule {
       allowed_origins    = ["http://www.example.com"]
       exposed_headers    = ["x-tempo-*"]
